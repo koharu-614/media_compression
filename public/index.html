@@ -1,16 +1,81 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>画像分割ツール</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <h1>画像分割ツール</h1>
-  <input type="file" id="file" accept="image/*">
-  <label>分割数: <input type="number" id="parts" value="2" min="1"></label>
-  <button id="split-btn">分割する</button>
-  <div id="output"></div>
-  <script src="script.js"></script>
-</body>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>画像分割サイト</title>
+  </head>
+  <body>
+    <h1>画像分割テスト</h1>
+    <form id="upload-form">
+      <input type="file" id="image" accept="image/*" />
+      <button type="submit">アップロードして分割</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+      document.getElementById("upload-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const file = document.getElementById("image").files[0];
+        if (!file) return alert("画像を選択してください");
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/split", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        const result = document.getElementById("result");
+        result.innerHTML = "";
+
+        if (data.parts) {
+          data.parts.forEach((src) => {
+            const img = document.createElement("img");
+            img.src = src;
+            img.style.margin = "5px";
+            img.width = 150;
+            result.appendChild(img);
+          });
+
+          // ZIPダウンロードボタンを表示
+          if (data.zipFile) {
+            const zipContainer = document.createElement("div");
+            zipContainer.style.marginTop = "10px";
+
+            const downloadLink = document.createElement("a");
+            // サーバーが返すzipNameがあればそれをファイル名に使う
+            downloadLink.download = data.zipName || "split_images.zip";
+            downloadLink.textContent = "ZIPで保存する";
+            downloadLink.style.display = "inline-block";
+            downloadLink.style.padding = "8px 12px";
+            downloadLink.style.background = "#0070f3";
+            downloadLink.style.color = "white";
+            downloadLink.style.borderRadius = "4px";
+            downloadLink.style.textDecoration = "none";
+
+            zipContainer.appendChild(downloadLink);
+            result.appendChild(zipContainer);
+
+            // data:URL を Blob に変換してオブジェクトURLを使うとダウンロード名が確実に反映される
+            try {
+              const resp = await fetch(data.zipFile);
+              const blob = await resp.blob();
+              const url = URL.createObjectURL(blob);
+              downloadLink.href = url;
+              downloadLink.onclick = () => setTimeout(() => URL.revokeObjectURL(url), 1500);
+            } catch (e) {
+              console.error('ZIPの準備に失敗しました', e);
+              // フォールバック: data URL を直接使う
+              downloadLink.href = data.zipFile;
+            }
+          }
+        } else {
+          alert("エラー: " + data.error);
+        }
+      });
+    </script>
+  </body>
 </html>

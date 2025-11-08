@@ -18,7 +18,9 @@
   },
   "homepage": "https://github.com/koharu-614/media_compression#readme",
   "dependencies": {
+    "archiver": "^7.0.1",
     "express": "^5.1.0",
+    "formidable": "^3.5.4",
     "sharp": "^0.34.5"
   }
 }
