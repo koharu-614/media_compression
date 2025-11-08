@@ -1,0 +1,24 @@
+{
+  "name": "media_compression",
+  "version": "1.0.0",
+  "description": "画像を分割してココフォリアの画質を維持するサイトの作成",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/koharu-614/media_compression.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/koharu-614/media_compression/issues"
+  },
+  "homepage": "https://github.com/koharu-614/media_compression#readme",
+  "dependencies": {
+    "express": "^5.1.0",
+    "sharp": "^0.34.5"
+  }
+}

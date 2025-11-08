@@ -1,0 +1,11 @@
+body {
+  font-family: sans-serif;
+  text-align: center;
+  padding: 20px;
+}
+
+#output img {
+  margin: 5px;
+  border: 1px solid #ccc;
+  max-width: 200px;
+}
