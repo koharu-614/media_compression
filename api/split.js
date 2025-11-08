@@ -1,6 +1,7 @@
 import formidable from "formidable";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import sharp from "sharp";
 import archiver from "archiver";
 
@@ -15,8 +16,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ message: "POSTメソッドを使用してください" });
   }
 
-  const uploadDir = path.join(process.cwd(), "uploads");
-  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+  // サーバー環境ではプロジェクトフォルダへの書き込みが制限されることがあるため
+  // OSの一時ディレクトリを使う
+  const uploadDir = path.join(os.tmpdir(), "media_compression_uploads");
+  if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
   const form = formidable({ uploadDir, keepExtensions: true });
 
@@ -26,13 +29,38 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "ファイル解析中にエラーが発生しました" });
     }
 
-    const file = files.file[0];
-    const filePath = file.filepath;
+    // formidable の出力は環境やバージョンで形が変わるため柔軟に対応
+    let uploadedFile = null;
+    if (Array.isArray(files.file)) uploadedFile = files.file[0];
+    else if (files.file) uploadedFile = files.file;
+    else {
+      // どのキーにファイルが入っているか探索
+      for (const k of Object.keys(files)) {
+        const v = files[k];
+        if (Array.isArray(v) && v.length > 0) {
+          uploadedFile = v[0];
+          break;
+        } else if (v && (v.filepath || v.path)) {
+          uploadedFile = v;
+          break;
+        }
+      }
+    }
+
+    if (!uploadedFile) {
+      return res.status(400).json({ error: "アップロードされたファイルが見つかりません" });
+    }
+
+    const file = uploadedFile;
+    const filePath = file.filepath || file.filePath || file.path;
 
     try {
-      // 元のファイル名（拡張子なし）を取得
-      const originalName = path.parse(file.originalFilename || file.newFilename || file.filepath).name;
-      const metadata = await sharp(filePath).metadata();
+  // 元のファイル名（拡張子なし）を取得
+  const originalName = path.parse(file.originalFilename || file.originalname || file.newFilename || file.name || file.filepath || filePath || "split_images").name;
+
+  // ファイルパスから直接読み込めない可能性があるため、一旦バッファで読み込む
+  const inputBuffer = await fs.promises.readFile(filePath);
+  const metadata = await sharp(inputBuffer).metadata();
       if (!metadata.width || !metadata.height) {
         throw new Error("画像のサイズを取得できませんでした");
       }
@@ -66,7 +94,7 @@ export default async function handler(req, res) {
           const outputPath = path.join(uploadDir, outputFileName);
           outputPaths.push(outputPath);
 
-          await sharp(filePath)
+          await sharp(inputBuffer)
             .extract({
               left: Math.max(0, left),
               top: Math.max(0, top),
@@ -92,12 +120,15 @@ export default async function handler(req, res) {
       output.on("close", async () => {
         // 分割画像を削除
         for (const tempFile of outputPaths) {
-          fs.unlinkSync(tempFile);
+          try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) { console.warn('failed to remove temp', tempFile, e); }
         }
+
+        // アップロード元ファイルを削除（存在する場合）
+        try { if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) { console.warn('failed to remove uploaded file', filePath, e); }
 
         // ZIPをBase64で返す
         const zipBase64 = fs.readFileSync(zipPath, { encoding: "base64" });
-        fs.unlinkSync(zipPath);
+        try { fs.unlinkSync(zipPath); } catch (e) { console.warn('failed to remove zip', zipPath, e); }
 
         res.status(200).json({
           message: "画像を分割してZIP化しました",
